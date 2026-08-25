@@ -78,7 +78,8 @@ public class MissedCallNotificationService extends NotificationListenerService {
     private void publish(List<String> rows, String firstNumber, int unread) {
         String result = String.join("\n", rows);
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("text", result).apply();
-        Intent open = new Intent(this, MainActivity.class).putExtra("result", result)
+        Intent open = new Intent(this, MainActivity.class)
+                .putExtra("history_only", true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pending = PendingIntent.getActivity(this, 1, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

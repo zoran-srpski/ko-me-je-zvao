@@ -26,9 +26,18 @@ import java.util.List;
 
 public class MainActivity extends Activity {
     private LinearLayout root;
+    private boolean historyOnly;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        historyOnly = getIntent().getBooleanExtra("history_only", false);
+        buildScreen();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        historyOnly = intent.getBooleanExtra("history_only", false);
         buildScreen();
     }
 
@@ -48,6 +57,18 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(24), dp(28), dp(24), dp(32));
         scroll.addView(root);
+
+        if (historyOnly) {
+            List<CallHistoryStore.Entry> history = CallHistoryStore.load(this);
+            if (history.isEmpty()) {
+                TextView empty = text("Нема сачуваних пропуштених позива.", 19, false);
+                root.addView(empty);
+            } else {
+                showHistory(history);
+            }
+            setContentView(scroll);
+            return;
+        }
 
         TextView title = text("Ко ме је звао?", 29, true);
         title.setTextColor(Color.rgb(13, 71, 161));
