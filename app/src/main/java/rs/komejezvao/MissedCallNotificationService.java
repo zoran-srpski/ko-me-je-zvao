@@ -11,12 +11,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.Telephony;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 public class MissedCallNotificationService extends NotificationListenerService {
     static final String CHANNEL_ID = "prepoznati_pozivi";
@@ -28,28 +27,16 @@ public class MissedCallNotificationService extends NotificationListenerService {
     }
 
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
-        if (sbn == null || getPackageName().equals(sbn.getPackageName())) return;
-        Bundle extras = sbn.getNotification().extras;
-        Set<String> pieces = new LinkedHashSet<>();
-        add(pieces, extras.getCharSequence(Notification.EXTRA_TITLE));
-        add(pieces, extras.getCharSequence(Notification.EXTRA_TEXT));
-        add(pieces, extras.getCharSequence(Notification.EXTRA_BIG_TEXT));
-        CharSequence[] lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
-        if (lines != null) for (CharSequence line : lines) add(pieces, line);
-        String combined = String.join("\n", pieces);
-        List<String> numbers = PhoneNumberParser.find(combined);
-        if (numbers.isEmpty()) {
-            collectNewestMessageText(extras, pieces);
-            combined = String.join("\n", pieces);
-            numbers = PhoneNumberParser.find(combined);
-        }
-        if (numbers.isEmpty()) {
-            collectBundleText(extras, pieces, 0);
-            combined = String.join("\n", pieces);
-            numbers = PhoneNumberParser.find(combined);
-        }
+        if (sbn == null || sbn.getNotification() == null) return;
+
+        String smsPackage = Telephony.Sms.getDefaultSmsPackage(this);
+        if (smsPackage == null || !smsPackage.equals(sbn.getPackageName())) return;
+
+        String messageBody = extractNewestSmsBody(sbn.getNotification());
         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                .putString("last_notification_text", combined).apply();
+                .putString("last_notification_text", messageBody).apply();
+
+        List<String> numbers = PhoneNumberParser.find(messageBody);
         if (numbers.isEmpty()) return;
         if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return;
 
@@ -68,39 +55,24 @@ public class MissedCallNotificationService extends NotificationListenerService {
         publish(rows, numbers.get(0), unread);
     }
 
-    private void add(Set<String> pieces, CharSequence value) {
-        if (value != null && value.length() > 0) pieces.add(value.toString());
-    }
+    private String extractNewestSmsBody(Notification notification) {
+        Bundle extras = notification.extras;
+        if (extras == null) return "";
 
-    private void collectBundleText(Bundle bundle, Set<String> pieces, int depth) {
-        if (bundle == null || depth > 2) return;
-        for (String key : bundle.keySet()) {
-            Object value = bundle.get(key);
-            if (value instanceof CharSequence) {
-                add(pieces, (CharSequence) value);
-            } else if (value instanceof CharSequence[]) {
-                for (CharSequence item : (CharSequence[]) value) add(pieces, item);
-            } else if (value instanceof Bundle) {
-                collectBundleText((Bundle) value, pieces, depth + 1);
-            } else if (value instanceof Parcelable[]) {
-                for (Parcelable item : (Parcelable[]) value) {
-                    if (item instanceof Bundle) collectBundleText((Bundle) item, pieces, depth + 1);
-                }
-            } else if (value instanceof ArrayList<?>) {
-                for (Object item : (ArrayList<?>) value) {
-                    if (item instanceof CharSequence) add(pieces, (CharSequence) item);
-                    else if (item instanceof Bundle) collectBundleText((Bundle) item, pieces, depth + 1);
-                }
-            }
-        }
-    }
-
-    private void collectNewestMessageText(Bundle extras, Set<String> pieces) {
         Parcelable[] messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES);
         if (messages != null && messages.length > 0) {
             Parcelable newest = messages[messages.length - 1];
-            if (newest instanceof Bundle) collectBundleText((Bundle) newest, pieces, 0);
+            if (newest instanceof Bundle) {
+                CharSequence text = ((Bundle) newest).getCharSequence("text");
+                if (text != null) return text.toString();
+            }
         }
+
+        CharSequence bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
+        if (bigText != null) return bigText.toString();
+
+        CharSequence text = extras.getCharSequence(Notification.EXTRA_TEXT);
+        return text == null ? "" : text.toString();
     }
 
     private void publish(List<String> rows, String firstNumber, int unread) {
