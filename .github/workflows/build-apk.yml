@@ -23,14 +23,16 @@ jobs:
           gradle-version: '8.9'
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
-      - name: Save APK on build branch
+      - name: Save APK on main branch
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk KoMeJeZvao-v0.1.5.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add KoMeJeZvao-v0.1.5.apk
-          git commit -m "Add KoMeJeZvao v0.1.5 APK"
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m "Add KoMeJeZvao v0.1.5 APK"
+            git push
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: KoMeJeZvao-v0.1.5
