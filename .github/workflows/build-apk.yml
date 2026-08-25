@@ -1,0 +1,38 @@
+name: Build Ko Me Je Zvao APK
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'KoMeJeZvao-v0.1.5.apk'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Save APK on build branch
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk KoMeJeZvao-v0.1.5.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add KoMeJeZvao-v0.1.5.apk
+          git commit -m "Add KoMeJeZvao v0.1.5 APK"
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KoMeJeZvao-v0.1.5
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
