@@ -38,19 +38,17 @@ public class MissedCallNotificationService extends NotificationListenerService {
 
         List<String> numbers = PhoneNumberParser.find(messageBody);
         if (numbers.isEmpty()) return;
-        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return;
 
         List<String> rows = new ArrayList<>();
         List<CallHistoryStore.Entry> additions = new ArrayList<>();
-        boolean hasKnownContact = false;
+        boolean canReadContacts = checkSelfPermission(Manifest.permission.READ_CONTACTS)
+                == PackageManager.PERMISSION_GRANTED;
         for (String number : numbers) {
-            String name = ContactLookup.nameFor(this, number);
-            if (name != null && !name.trim().isEmpty()) hasKnownContact = true;
+            String name = canReadContacts ? ContactLookup.nameFor(this, number) : null;
             String shownName = name == null || name.trim().isEmpty() ? "Непознат број" : name;
             rows.add(shownName + " — " + PhoneNumberParser.pretty(number));
             additions.add(new CallHistoryStore.Entry(shownName, number, sbn.getPostTime()));
         }
-        if (!hasKnownContact) return;
         int unread = CallHistoryStore.add(this, additions);
         publish(rows, numbers.get(0), unread);
     }
@@ -59,17 +57,28 @@ public class MissedCallNotificationService extends NotificationListenerService {
         Bundle extras = notification.extras;
         if (extras == null) return "";
 
+        // Prefer the newest actual MessagingStyle message so the sender/title and
+        // older messages from a grouped notification are never parsed as the SMS.
         Parcelable[] messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES);
         if (messages != null && messages.length > 0) {
-            Parcelable newest = messages[messages.length - 1];
-            if (newest instanceof Bundle) {
-                CharSequence text = ((Bundle) newest).getCharSequence("text");
-                if (text != null) return text.toString();
+            for (int i = messages.length - 1; i >= 0; i--) {
+                Parcelable item = messages[i];
+                if (item instanceof Bundle) {
+                    CharSequence text = ((Bundle) item).getCharSequence("text");
+                    if (text != null && text.length() > 0) return text.toString();
+                }
             }
         }
 
         CharSequence bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
-        if (bigText != null) return bigText.toString();
+        if (bigText != null && bigText.length() > 0) return bigText.toString();
+
+        CharSequence[] lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
+        if (lines != null && lines.length > 0) {
+            for (int i = lines.length - 1; i >= 0; i--) {
+                if (lines[i] != null && lines[i].length() > 0) return lines[i].toString();
+            }
+        }
 
         CharSequence text = extras.getCharSequence(Notification.EXTRA_TEXT);
         return text == null ? "" : text.toString();
