@@ -2,14 +2,12 @@ package rs.komejezvao;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -19,36 +17,23 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-import java.util.List;
 
 public class MainActivity extends Activity {
     private LinearLayout root;
-    private boolean historyOnly;
-
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        historyOnly = getIntent().getBooleanExtra("history_only", false);
         buildScreen();
     }
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        historyOnly = intent.getBooleanExtra("history_only", false);
         buildScreen();
     }
 
     @Override protected void onResume() {
         super.onResume();
         buildScreen();
-    }
-
-    @Override protected void onPause() {
-        super.onPause();
-        CallHistoryStore.markAllViewed(this);
     }
 
     private void buildScreen() {
@@ -58,22 +43,10 @@ public class MainActivity extends Activity {
         root.setPadding(dp(24), dp(28), dp(24), dp(32));
         scroll.addView(root);
 
-        if (historyOnly) {
-            List<CallHistoryStore.Entry> history = CallHistoryStore.load(this);
-            if (history.isEmpty()) {
-                TextView empty = text("Нема сачуваних пропуштених позива.", 19, false);
-                root.addView(empty);
-            } else {
-                showHistory(history);
-            }
-            setContentView(scroll);
-            return;
-        }
-
         TextView title = text("Ко ме је звао?", 29, true);
         title.setTextColor(Color.rgb(13, 71, 161));
         root.addView(title);
-        TextView intro = text("Аутоматски препознаје бројеве у обавештењима о пропуштеним позивима и приказује имена из ваших контаката.", 17, false);
+        TextView intro = text("Допуњује SMS обавештења именима из ваших контаката, без промене подразумеване SMS апликације.", 17, false);
         intro.setPadding(0, dp(10), 0, dp(24));
         root.addView(intro);
 
@@ -93,8 +66,21 @@ public class MainActivity extends Activity {
         privacy.setPadding(0, dp(24), 0, dp(18));
         root.addView(privacy);
 
-        List<CallHistoryStore.Entry> history = CallHistoryStore.load(this);
-        if (!history.isEmpty()) showHistory(history);
+        TextView behavior = text("Како ради: SMS без броја остаје непромењен. Када порука садржи број, оригинално обавештење замењује се истим текстом допуњеним именом контакта. Додир на обавештење и даље отвара вашу SMS апликацију, а дугме „Позови“ отвара бројчаник.", 16, false);
+        behavior.setPadding(0, dp(8), 0, dp(18));
+        root.addView(behavior);
+
+        String last = getSharedPreferences(MissedCallNotificationService.PREFS, MODE_PRIVATE)
+                .getString("last_enriched_text", "");
+        if (!last.isEmpty()) {
+            TextView heading = text("Последња обрађена порука", 19, true);
+            heading.setPadding(0, dp(8), 0, dp(6));
+            root.addView(heading);
+            TextView preview = text(last, 17, false);
+            preview.setPadding(dp(12), dp(12), dp(12), dp(12));
+            preview.setBackgroundColor(Color.rgb(232, 240, 254));
+            root.addView(preview);
+        }
         setContentView(scroll);
     }
 
@@ -114,94 +100,6 @@ public class MainActivity extends Activity {
         button.setEnabled(!done);
         if (!done) button.setOnClickListener(action);
         card.addView(button, new LinearLayout.LayoutParams(-1, -2));
-    }
-
-    private void showResult(String result) {
-        TextView heading = text("Последњи препознати позиви", 20, true);
-        heading.setPadding(0, dp(12), 0, dp(8));
-        root.addView(heading);
-        for (String row : result.split("\n")) {
-            List<String> numbers = PhoneNumberParser.find(row);
-            TextView line = text(row, 18, false);
-            line.setPadding(dp(12), dp(11), dp(12), dp(11));
-            line.setBackgroundColor(Color.rgb(232, 240, 254));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-            lp.setMargins(0, 0, 0, dp(6));
-            root.addView(line, lp);
-            if (!numbers.isEmpty()) {
-                String number = numbers.get(0);
-                Button call = new Button(this);
-                call.setText("Позови " + PhoneNumberParser.pretty(number));
-                call.setTextSize(18);
-                call.setAllCaps(false);
-                call.setOnClickListener(v -> startActivity(
-                        new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + number))));
-                LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(-1, -2);
-                buttonLp.setMargins(0, 0, 0, dp(14));
-                root.addView(call, buttonLp);
-            }
-        }
-    }
-
-    private void showHistory(List<CallHistoryStore.Entry> history) {
-        int newCount = 0;
-        for (CallHistoryStore.Entry entry : history) if (!entry.viewed) newCount++;
-        String countText = "Пропуштени позиви (" + history.size() + ")";
-        if (newCount > 0) countText += " — нови: " + newCount;
-        TextView heading = text(countText, 22, true);
-        heading.setPadding(0, dp(12), 0, dp(6));
-        root.addView(heading);
-        Button clear = new Button(this);
-        clear.setText("Обриши све");
-        clear.setAllCaps(false);
-        clear.setOnClickListener(v -> new AlertDialog.Builder(this)
-                .setTitle("Обрисати све позиве?")
-                .setMessage("Овај списак ће бити трајно испражњен.")
-                .setNegativeButton("Откажи", null)
-                .setPositiveButton("Обриши све", (dialog, which) -> {
-                    CallHistoryStore.clear(this);
-                    buildScreen();
-                }).show());
-        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(-1, -2);
-        clearLp.setMargins(0, 0, 0, dp(10));
-        root.addView(clear, clearLp);
-        SimpleDateFormat format = new SimpleDateFormat("dd.MM.yyyy.  HH:mm", new Locale("sr", "RS"));
-        for (int i = history.size() - 1; i >= 0; i--) {
-            CallHistoryStore.Entry entry = history.get(i);
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding(dp(14), dp(12), dp(14), dp(10));
-            card.setBackgroundColor(entry.viewed ? Color.rgb(245, 245, 245) : Color.rgb(220, 237, 255));
-            TextView name = text((entry.viewed ? "" : "НОВ  •  ") + entry.name, 19, true);
-            if (!entry.viewed) name.setTextColor(Color.rgb(13, 71, 161));
-            card.addView(name);
-            TextView details = text(PhoneNumberParser.pretty(entry.number) + "\n" + format.format(new Date(entry.time)), 16, false);
-            details.setPadding(0, dp(4), 0, dp(6));
-            card.addView(details);
-            Button call = new Button(this);
-            call.setText("Позови");
-            call.setTextSize(18);
-            call.setAllCaps(false);
-            call.setOnClickListener(v -> startActivity(
-                    new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + entry.number))));
-            LinearLayout actions = new LinearLayout(this);
-            actions.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(0, -2, 1f);
-            actions.addView(call, actionLp);
-            Button delete = new Button(this);
-            delete.setText("Обриши");
-            delete.setTextSize(16);
-            delete.setAllCaps(false);
-            delete.setOnClickListener(v -> {
-                CallHistoryStore.delete(this, entry);
-                buildScreen();
-            });
-            actions.addView(delete, actionLp);
-            card.addView(actions, new LinearLayout.LayoutParams(-1, -2));
-            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
-            cardLp.setMargins(0, 0, 0, dp(10));
-            root.addView(card, cardLp);
-        }
     }
 
     private boolean isListenerEnabled() {

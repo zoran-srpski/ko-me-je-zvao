@@ -13,18 +13,37 @@ final class PhoneNumberParser {
 
     private PhoneNumberParser() {}
 
-    static List<String> find(String text) {
-        Set<String> found = new LinkedHashSet<>();
-        if (text == null) return new ArrayList<>();
+    static final class Match {
+        final int start;
+        final int end;
+        final String original;
+        final String number;
+
+        Match(int start, int end, String original, String number) {
+            this.start = start;
+            this.end = end;
+            this.original = original;
+            this.number = number;
+        }
+    }
+
+    static List<Match> matches(String text) {
+        List<Match> found = new ArrayList<>();
+        if (text == null) return found;
         Matcher matcher = PHONE.matcher(text);
         while (matcher.find()) {
-            String value = matcher.group().trim();
-            String digits = value.replaceAll("\\D", "");
+            String original = matcher.group().trim();
+            String digits = original.replaceAll("\\D", "");
             if (digits.startsWith("00381")) digits = digits.substring(2);
-            if (digits.startsWith("381")) value = "+" + digits;
-            else value = digits;
-            found.add(value);
+            String normalized = digits.startsWith("381") ? "+" + digits : digits;
+            found.add(new Match(matcher.start(), matcher.end(), original, normalized));
         }
+        return found;
+    }
+
+    static List<String> find(String text) {
+        Set<String> found = new LinkedHashSet<>();
+        for (Match match : matches(text)) found.add(match.number);
         return new ArrayList<>(found);
     }
 

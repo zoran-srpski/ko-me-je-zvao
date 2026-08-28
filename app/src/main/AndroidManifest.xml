@@ -21,7 +21,7 @@
         <service
             android:name=".MissedCallNotificationService"
             android:exported="false"
-            android:label="Препознавање пропуштених позива"
+            android:label="Обогаћивање SMS обавештења"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

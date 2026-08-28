@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
-      - 'KoMeJeZvao-v0.1.8.apk'
+      - 'KoMeJeZvao-v0.2.0.apk'
 
 permissions:
   contents: write
@@ -25,16 +25,16 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Save APK on main branch
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk KoMeJeZvao-v0.1.8.apk
+          cp app/build/outputs/apk/debug/app-debug.apk KoMeJeZvao-v0.2.0.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add KoMeJeZvao-v0.1.8.apk
+          git add KoMeJeZvao-v0.2.0.apk
           if ! git diff --cached --quiet; then
-            git commit -m "Add KoMeJeZvao v0.1.8 APK"
+            git commit -m "Add KoMeJeZvao v0.2.0 APK"
             git push
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: KoMeJeZvao-v0.1.8
+          name: KoMeJeZvao-v0.2.0
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
